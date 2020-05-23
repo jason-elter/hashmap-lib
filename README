@@ -1,0 +1,8 @@
+Written by Jason Elter 2020.
+
+
+FILES:
+HashMap.cpp -- Header and implementation file for a HashMap class.
+SpamDetector.cpp -- Simple use of the HashMap class for detecting spam words from given database.
+Makefile -- Makefile for compiling the library.
+README -- you're reading it right now!
