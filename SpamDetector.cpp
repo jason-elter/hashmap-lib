@@ -27,15 +27,21 @@
 #define DATABASE_INDEX 1
 #define MESSAGE_INDEX 2
 #define THRESHOLD_INDEX 3
+#define FAILURE -1
 
 const char CAPS_MIN = 'A', CAPS_MAX = 'Z';
 
-// Prints that there has been an input error and exits the program.
-static void badInput()
+/**
+ * Exception for bad input.
+ */
+class BadInputException : public std::exception
 {
-    std::cerr << INPUT_ERROR << std::endl;
-    exit(EXIT_FAILURE);
-}
+public:
+    const char *what() const noexcept override
+    {
+        return INPUT_ERROR;
+    }
+};
 
 // Returns true if the given string represents a non-negative number. Otherwise, returns false.
 static bool _isNonNegativeNumber(const std::string &st)
@@ -83,20 +89,20 @@ static void
 loadDatabase(const char *pathString, std::vector<std::string> &phrases, std::vector<int> &scores)
 {
     typedef boost::tokenizer<boost::char_separator<char>> tokenizer;
-    boost::char_separator<char> sep{SEPARATOR};
+    boost::char_separator<char> sep(SEPARATOR, nullptr, boost::keep_empty_tokens);
     boost::filesystem::path p(pathString);
     if (!boost::filesystem::exists(p))
     {
-        badInput();
+        throw BadInputException();
     }
 
     // Read lines from file.
     boost::filesystem::ifstream file(p);
-    for (std::string line; std::getline(file, line);)
+    for (std::string line; std::getline(file, line); )
     {
         if (line.empty() && !file.eof())
         {
-            badInput();
+            throw BadInputException();
         }
 
         // Tokenize and get values.
@@ -104,20 +110,20 @@ loadDatabase(const char *pathString, std::vector<std::string> &phrases, std::vec
         tokenizer::iterator it = tok.begin();
         if (it == tok.end())
         {
-            badInput();
+            throw BadInputException();
         }
 
         phrases.push_back(_toLowercase(*it));
         if (++it == tok.end() || !_isNonNegativeNumber(*it))
         {
-            badInput();
+            throw BadInputException();
         }
         scores.push_back(std::stoi(*it));
 
         // Check that only 2 columns have been given.
         if (++it != tok.end())
         {
-            badInput();
+            throw BadInputException();
         }
     }
 }
@@ -134,13 +140,13 @@ static int scoreEmail(const char *pathString, HashMap<std::string, int> &databas
     boost::filesystem::path p(pathString);
     if (!boost::filesystem::exists(p))
     {
-        badInput();
+        throw BadInputException();
     }
 
     // Read lines from file.
     int score = 0;
     boost::filesystem::ifstream file(p);
-    for (std::string line; std::getline(file, line);)
+    for (std::string line; std::getline(file, line); )
     {
         if (!line.empty())
         {
@@ -148,7 +154,7 @@ static int scoreEmail(const char *pathString, HashMap<std::string, int> &databas
             for (const std::pair<std::string, int> &pair : database)
             {
                 int phraseIndex = line.find(pair.first);
-                while (phraseIndex != std::string::npos)
+                while (phraseIndex != FAILURE)
                 {
                     line.replace(phraseIndex, pair.first.size(), SEPARATOR);
                     score += pair.second;
@@ -176,21 +182,35 @@ int main(int argc, char **argv)
         std::cerr << USAGE_MSG << std::endl;
         exit(EXIT_FAILURE);
     }
-    std::string thresholdString(argv[THRESHOLD_INDEX]);
-    int threshold;
-    if (!_isNonNegativeNumber(thresholdString) || (threshold = std::stoi(thresholdString)) == 0)
+
+    try
     {
-        badInput();
+        std::string thresholdString(argv[THRESHOLD_INDEX]);
+        int threshold;
+        if (!_isNonNegativeNumber(thresholdString) || (threshold = std::stoi(thresholdString)) == 0)
+        {
+            throw BadInputException();
+        }
+
+        std::vector<std::string> phrases;
+        std::vector<int> scores;
+
+        loadDatabase(argv[DATABASE_INDEX], phrases, scores);
+        HashMap<std::string, int> database(phrases, scores);
+
+        int score = scoreEmail(argv[MESSAGE_INDEX], database);
+        std::cout << ((score >= threshold) ? SPAM : NOT_SPAM) << std::endl;
     }
-
-    std::vector<std::string> phrases;
-    std::vector<int> scores;
-
-    loadDatabase(argv[DATABASE_INDEX], phrases, scores);
-    HashMap<std::string, int> database(phrases, scores);
-
-    int score = scoreEmail(argv[MESSAGE_INDEX], database);
-    std::cout << ((score >= threshold) ? SPAM : NOT_SPAM) << std::endl;
+    catch (BadInputException &e)
+    {
+        std::cerr << e.what() << std::endl;
+        return EXIT_FAILURE;
+    }
+    catch (HashMapException &e)
+    {
+        std::cerr << e.what() << std::endl;
+        return EXIT_FAILURE;
+    }
 
     return EXIT_SUCCESS;
 }

@@ -25,13 +25,15 @@
 #define ERROR_OUT_OF_RANGE "ERROR: Attempting to use HashMap iterator outside of range."
 
 const double MIN_LOAD_FACTOR = 0.25, MAX_LOAD_FACTOR = 0.75;
-const bool ITERATOR_END = false;
+const bool END_FLAG = false;
+
 
 /**
  * Generic abstract exception for HashMap exceptions.
  */
 class HashMapException : public std::exception
 {
+public:
     const char *what() const noexcept override = 0;
 };
 
@@ -40,6 +42,7 @@ class HashMapException : public std::exception
  */
 class VectorInputException : public HashMapException
 {
+public:
     const char *what() const noexcept override
     {
         return ERROR_VECTOR_INPUT;
@@ -51,6 +54,7 @@ class VectorInputException : public HashMapException
  */
 class KeyNotFoundException : public HashMapException
 {
+public:
     const char *what() const noexcept override
     {
         return ERROR_KEY_NOT_FOUND;
@@ -80,18 +84,19 @@ class HashMap
     typedef std::vector<std::pair<KeyT, ValueT> *> HashRow;
 
     // The hashing function.
-    int _hash(KeyT &key) const noexcept
+    int _hash(const KeyT &key) const noexcept
     {
         return std::hash<KeyT>{}(key) & (_capacity - 1);
     }
 
     // Copies another HashMap into this one.
-    void _copy(HashMap &other) noexcept;
+    void _copy(const HashMap &other) noexcept;
 
     // Rehashes this map.
     void _rehashArray(int newCapacity) noexcept;
 
-    int _size{}, _capacity{};
+    int _size, _capacity;
+    ValueT _defaultValue;
     HashRow *_arr;
 
 public:
@@ -110,14 +115,14 @@ public:
      * @param values A vector of values.
      * @throws VectorInputException if vectors aren't of same size.
      */
-    HashMap(std::vector<KeyT> &keys, std::vector<ValueT> &values);
+    HashMap(const std::vector<KeyT> &keys, const std::vector<ValueT> &values);
 
     /**
      * Copy constructor for HashMap.
      *
      * @param other The other HashMap.
      */
-    HashMap(HashMap &other) noexcept;
+    HashMap(const HashMap &other) noexcept;
 
     /**
      * Destructor for HashMap.
@@ -133,13 +138,14 @@ public:
         int _i, _j, _capacity;
         HashRow *_arr;
 
+
     public:
         // iterator traits.
         typedef std::forward_iterator_tag iterator_category;
-        typedef const std::pair<KeyT, ValueT> value_type;
+        typedef std::pair<KeyT, ValueT> value_type;
         typedef std::ptrdiff_t difference_type;
-        typedef const std::pair<KeyT, ValueT> *pointer;
-        typedef const std::pair<KeyT, ValueT> &reference;
+        typedef value_type* pointer;
+        typedef value_type& reference;
 
         /**
          * Creates new iterator from within instance of HashMap.
@@ -148,16 +154,15 @@ public:
          * @param capacity The HashMaps capacity.
          * @param begin if true then starts at start. Otherwise at end of iterator.
          */
-        const_iterator(HashRow *arr, int capacity, bool begin = true) noexcept;
+        explicit const_iterator(HashRow *arr, int capacity, bool begin = true) noexcept;
 
         /**
-         * Copy constructor for HashMap iterator.
+         * Copy constructor for iterator.
          *
-         * @param other
+         * @param other The iterator to copy.
          */
-        const_iterator(const_iterator &other) noexcept :
-                _arr(other._arr), _i(other._i), _j(other._j), _capacity(other._capacity)
-        {}
+        const_iterator(const const_iterator &other) noexcept : _i(other._i), _j(other._j), _capacity(other._capacity),
+                                                               _arr(other._arr) {}
 
         /**
          * -> operator for iterator.
@@ -207,10 +212,9 @@ public:
          * @param other The other iterator.
          * @return true if both iterators point at same HashMap at same location. Otherwise, false.
          */
-        const bool &operator==(const const_iterator &other) const noexcept
+        bool operator==(const const_iterator &other) const noexcept
         {
-            return (_arr == other._arr) && (_i == other._i) &&
-                   (_j == other._j) && (_capacity == other._capacity);
+            return (_arr == other._arr) && (_i == other._i) && (_j == other._j);
         }
 
         /**
@@ -220,7 +224,7 @@ public:
          * @param other The other iterator.
          * @return true if both don't point at same HashMap at same location. Otherwise, false.
          */
-        const bool &operator!=(const const_iterator &other) const noexcept
+        bool operator!=(const const_iterator &other) const noexcept
         {
             return !(*this == other);
         }
@@ -344,7 +348,7 @@ public:
      *
      * @return Starting iterator for this map.
      */
-    const_iterator begin() const noexcept
+    const_iterator begin() const
     {
         return const_iterator(_arr, _capacity);
     }
@@ -354,9 +358,9 @@ public:
      *
      * @return End iterator for this map.
      */
-    const_iterator end() const noexcept
+    const_iterator end() const
     {
-        return const_iterator(_arr, _capacity, ITERATOR_END);
+        return const_iterator(_arr, _capacity, END_FLAG);
     }
 
     /**
@@ -376,7 +380,7 @@ public:
      */
     const_iterator cend() const noexcept
     {
-        return const_iterator(_arr, _capacity, ITERATOR_END);
+        return const_iterator(_arr, _capacity, END_FLAG);
     }
 
     // Operators.
@@ -431,7 +435,7 @@ public:
  * Otherwise, return nullptr. (This way this function can be used to save code in multiple places)
  */
 template<typename KeyT, typename ValueT>
-static ValueT *_getValue(KeyT &key, std::vector<std::pair<KeyT, ValueT> *> &row) noexcept
+static ValueT *_getValue(const KeyT &key, const std::vector<std::pair<KeyT, ValueT> *> &row) noexcept
 {
     for (auto *pair : row)
     {
@@ -448,7 +452,7 @@ static ValueT *_getValue(KeyT &key, std::vector<std::pair<KeyT, ValueT> *> &row)
  * Otherwise, returns false.
  */
 template<typename KeyT, typename ValueT>
-static bool _deleteValue(KeyT &key, std::vector<std::pair<KeyT, ValueT> *> &row) noexcept
+static bool _deleteValue(const KeyT &key, std::vector<std::pair<KeyT, ValueT> *> &row) noexcept
 {
     for (auto it = row.begin(); it != row.end(); ++it)
     {
@@ -468,17 +472,17 @@ static bool _deleteValue(KeyT &key, std::vector<std::pair<KeyT, ValueT> *> &row)
 
 // Private helper function that copies another map into this one.
 template<typename KeyT, typename ValueT>
-void HashMap<KeyT, ValueT>::_copy(HashMap &other) noexcept
+void HashMap<KeyT, ValueT>::_copy(const HashMap &other) noexcept
 {
     _size = other._size;
     _capacity = other._capacity;
     _arr = new std::vector<std::pair<KeyT, ValueT> *>[_capacity];
     for (int i = 0; i < _capacity; i++)
     {
-        auto &row = _arr[i];
-        for (auto *pair : row)
+        auto &thisRow = _arr[i], &otherRow = other._arr[i];
+        for (auto *pair : otherRow)
         {
-            row.push_back(new std::pair<KeyT, ValueT>(*pair));
+            thisRow.push_back(new std::pair<KeyT, ValueT>(*pair));
         }
     }
 }
@@ -493,7 +497,7 @@ void HashMap<KeyT, ValueT>::_rehashArray(int newCapacity) noexcept
         auto &row = _arr[i];
         for (auto *pair : row)
         {
-            temp[(std::hash<KeyT>(pair->first) & (newCapacity - 1))].push_back(pair);
+            temp[(std::hash<KeyT>{}(pair->first) & (newCapacity - 1))].push_back(pair);
         }
         row.clear();
     }
@@ -521,10 +525,10 @@ HashMap<KeyT, ValueT>::HashMap() noexcept : _size(DEFAULT_SIZE), _capacity(DEFAU
  * @throws VectorInputException if vectors aren't of same size.
  */
 template<typename KeyT, typename ValueT>
-HashMap<KeyT, ValueT>::HashMap(std::vector<KeyT> &keys, std::vector<ValueT> &values) :
+HashMap<KeyT, ValueT>::HashMap(const std::vector<KeyT> &keys, const std::vector<ValueT> &values) :
         _size(keys.size()), _capacity(DEFAULT_CAPACITY)
 {
-    if (_size != values.size())
+    if (_size != (int)values.size())
     {
         throw VectorInputException();
     }
@@ -537,7 +541,10 @@ HashMap<KeyT, ValueT>::HashMap(std::vector<KeyT> &keys, std::vector<ValueT> &val
     {
         auto *pair = new std::pair<KeyT, ValueT>(keys[i], values[i]);
         auto &row = _arr[_hash(pair->first)];
-        _deleteValue(pair->first, row);
+        if (_deleteValue(pair->first, row)) // If duplicate keys then remove pair and adjust size.
+        {
+            _size--;
+        }
         row.push_back(pair);
     }
 
@@ -549,7 +556,7 @@ HashMap<KeyT, ValueT>::HashMap(std::vector<KeyT> &keys, std::vector<ValueT> &val
  * @param other The other HashMap.
  */
 template<typename KeyT, typename ValueT>
-HashMap<KeyT, ValueT>::HashMap(HashMap &other) noexcept
+HashMap<KeyT, ValueT>::HashMap(const HashMap &other) noexcept
 {
     _copy(other);
 }
@@ -655,7 +662,7 @@ const ValueT &HashMap<KeyT, ValueT>::operator[](const KeyT &key) const noexcept
     {
         return *value;
     }
-    return ValueT(); // Will result in error.
+    return _defaultValue;
 }
 
 /**
@@ -673,7 +680,15 @@ ValueT &HashMap<KeyT, ValueT>::operator[](const KeyT &key) noexcept
     {
         return *value;
     }
-    return ValueT(); // Will result in error.
+
+    auto *pair = new std::pair<KeyT, ValueT>(key, ValueT());
+    _arr[_hash(key)].push_back(pair);
+    _size++;
+    if (getLoadFactor() > MAX_LOAD_FACTOR)
+    {
+        _rehashArray(_capacity * CHANGE_FACTOR);
+    }
+    return pair->second;
 }
 
 /**
@@ -728,7 +743,7 @@ template<typename KeyT, typename ValueT>
 int HashMap<KeyT, ValueT>::bucketIndex(const KeyT &key) const
 {
     int index = _hash(key);
-    if (_getValue(key, _arr[key]) != nullptr)
+    if (_getValue(key, _arr[index]) != nullptr)
     {
         return index;
     }
@@ -780,16 +795,20 @@ HashMap<KeyT, ValueT> &HashMap<KeyT, ValueT>::operator=(const HashMap<KeyT, Valu
 template<typename KeyT, typename ValueT>
 bool HashMap<KeyT, ValueT>::operator==(const HashMap &other) const noexcept
 {
-    if (_capacity != other._capacity || _size != other._size)
+    if (_size != other._size)
     {
         return false;
     }
 
     for (int i = 0; i < _capacity; i++)
     {
-        if (_arr[i] != other._arr[i])
+        auto &row = _arr[i];
+        for (auto *pair : row)
         {
-            return false;
+            if (!other.containsKey(pair->first) || other[pair->first] != pair->second)
+            {
+                return false;
+            }
         }
     }
     return true;
@@ -803,9 +822,8 @@ bool HashMap<KeyT, ValueT>::operator==(const HashMap &other) const noexcept
  * @param begin if true then starts at start. Otherwise at end of iterator.
  */
 template<typename KeyT, typename ValueT>
-HashMap<KeyT, ValueT>::const_iterator::const_iterator(HashRow *arr, int capacity,
-                                                      bool begin) noexcept :
-        _arr(arr), _j(0), _capacity(capacity)
+HashMap<KeyT, ValueT>::const_iterator::const_iterator(HashRow *arr, int capacity, bool begin) noexcept :
+        _j(0), _capacity(capacity), _arr(arr)
 {
     if (begin)
     {
@@ -845,13 +863,13 @@ HashMap<KeyT, ValueT>::const_iterator::operator++() noexcept
 {
     if (_i < _capacity)
     {
-        if (++_j >= _arr[_i].size())
+        if (++_j >= (int)_arr[_i].size())
         {
             _j = 0;
-            while (_arr[_i].empty() && (++_i < _capacity));
+            while ((++_i < _capacity) && _arr[_i].empty());
         }
-        return *this;
     }
+    return *this;
 }
 
 /**
